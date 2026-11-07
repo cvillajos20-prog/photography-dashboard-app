@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photography Dashboard</title>
+<style>
+  :root { --bg:#f4f6fa; --card:#fff; --text:#1c2333; --muted:#6b7488; --primary:#4f46e5; --danger:#dc2626; --border:#e3e7ef; --warn:#f59e0b; --ok:#16a34a; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#10131c; --card:#181c28; --text:#e8ebf4; --muted:#8c94a8; --border:#272d3d; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:20px 28px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; }
+  h1 { margin:0; font-size:1.4rem; }
+  main { padding:0 28px 40px; max-width:1100px; margin:auto; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin-bottom:20px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; }
+  .stat .label, .cap { color:var(--muted); font-size:.8rem; text-transform:uppercase; letter-spacing:.05em; }
+  .stat .value { font-size:1.8rem; font-weight:700; margin-top:6px; }
+  .stat.warn .value { color:var(--warn); }
+  .tabs { display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap; }
+  .tabs button { background:transparent; color:var(--muted); border:1px solid var(--border); }
+  .tabs button.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .toolbar { display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+  input, select, textarea { padding:10px 12px; border:1px solid var(--border); background:var(--card); color:var(--text); border-radius:8px; font:inherit; font-size:.95rem; width:100%; }
+  .toolbar input { flex:1; min-width:200px; width:auto; }
+  button { padding:10px 16px; border:0; border-radius:8px; cursor:pointer; font-size:.9rem; font-weight:600; background:var(--primary); color:#fff; }
+  button.ghost { background:transparent; color:var(--text); border:1px solid var(--border); }
+  button.danger { background:var(--danger); }
+  button.sm { padding:6px 10px; font-size:.8rem; }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
+  .table-wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:12px 10px; border-bottom:1px solid var(--border); white-space:nowrap; vertical-align:middle; }
+  th { color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.05em; }
+  td small { color:var(--muted); }
+  td.actions { display:flex; gap:6px; }
+  td.who { display:flex; align-items:center; gap:10px; }
+  .av { width:34px; height:34px; border-radius:50%; object-fit:cover; background:var(--border); }
+  .badge { padding:2px 8px; border-radius:99px; font-size:.75rem; background:var(--border); }
+  .badge.ok { color:var(--ok); } .badge.off { color:var(--warn); }
+  .empty { text-align:center; color:var(--muted); padding:30px; }
+  dialog { border:1px solid var(--border); border-radius:14px; background:var(--card); color:var(--text); padding:24px; width:min(560px,94vw); max-height:92vh; }
+  dialog::backdrop { background:rgba(0,0,0,.5); }
+  dialog h2 { margin-top:0; }
+  label { display:block; font-size:.8rem; color:var(--muted); margin:0 0 4px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .grid2 .wide { grid-column:1/-1; }
+  @media (max-width:520px) { .grid2 { grid-template-columns:1fr; } }
+  .dialog-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
+  .error { color:var(--danger); font-size:.85rem; margin-top:10px; min-height:1em; }
+  .cats { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📸 Photography Dashboard</h1>
+  <button id="addBtn">+ New Booking</button>
+</header>
+<main>
+  <section class="stats">
+    <div class="card stat"><div class="label">Total Bookings</div><div class="value" id="sBookings">–</div></div>
+    <div class="card stat warn"><div class="label">Upcoming Bookings</div><div class="value" id="sUpcoming">–</div></div>
+    <div class="card stat"><div class="label">Photographers</div><div class="value" id="sPhotog">–</div></div>
+    <div class="card stat"><div class="label">Packages</div><div class="value" id="sPackages">–</div></div>
+  </section>
+  <div class="card" style="margin-bottom:20px"><div class="cap">Bookings by package</div><div class="cats" id="cats"></div></div>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="bookings" class="active">Bookings</button>
+    <button data-tab="photographers">Photographers</button>
+    <button data-tab="packages">Packages</button>
+  </nav>
+  <div class="toolbar"><input id="search" placeholder="Search..." aria-label="Search"></div>
+  <div class="card table-wrap">
+    <table>
+      <thead><tr id="thead"></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</main>
+
+<dialog id="dlg">
+  <h2 id="dlgTitle">New Booking</h2>
+  <input type="hidden" id="fId">
+  <div class="grid2" id="fields"></div>
+  <div class="error" id="err" role="alert"></div>
+  <div class="dialog-actions">
+    <button class="ghost" id="cancelBtn">Cancel</button>
+    <button id="saveBtn">Save</button>
+  </div>
+</dialog>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money = (n) => n == null || n === '' ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits:2, maximumFractionDigits:2 });
+const fmtDate = (d) => { if (!d) return '—'; const x = new Date(d + 'T00:00:00'); return isNaN(x) ? esc(d) : x.toLocaleDateString('en-PH', { month:'short', day:'numeric', year:'numeric' }); };
+let tab = 'bookings', rows = [], lookups = { packages: [], photographers: [] };
+
+async function api(url, opts) {
+  const res = await fetch(url, { headers:{'Content-Type':'application/json'}, ...opts });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+/* ---- per-resource config: table columns + form fields ---- */
+const names = (list) => () => list().map(x => x.name);
+const CFG = {
+  bookings: {
+    label: 'Booking', add: '+ New Booking',
+    cols: [
+      ['Customer', b => `<strong>${esc(b.customer_name)}</strong><br><small>${esc(b.email)}</small>`],
+      ['Package', b => esc(b.package_name)],
+      ['Photographer', b => esc(b.photographer) || '—'],
+      ['Date', b => fmtDate(b.booking_date)],
+      ['Time', b => esc(b.booking_time?.slice(0, 5)) || '—'],
+      ['Location', b => esc(b.location) || '—'],
+    ],
+    fields: [
+      { k:'customer_name', label:'Customer name', req:true }, { k:'email', label:'Email address', type:'email', req:true },
+      { k:'phone', label:'Phone number', type:'tel' }, { k:'booking_date', label:'Booking date', type:'date', req:true },
+      { k:'booking_time', label:'Booking time', type:'time' }, { k:'location', label:'Location' },
+      { k:'package_name', label:'Package', type:'select', req:true, options: names(() => lookups.packages) },
+      { k:'photographer', label:'Photographer', type:'select', options: names(() => lookups.photographers) },
+      { k:'notes', label:'Notes', type:'textarea', wide:true },
+    ],
+  },
+  photographers: {
+    label: 'Photographer', add: '+ Add Photographer',
+    cols: [
+      ['Photographer', p => `<span class="who">${p.profile_image ? `<img class="av" src="${esc(p.profile_image)}" alt="" onerror="this.style.display='none'">` : ''}<span><strong>${esc(p.name)}</strong><br><small>${esc(p.specialty) || 'Photographer'}</small></span></span>`],
+      ['Location', p => esc(p.location) || '—'],
+      ['Experience', p => p.experience == null ? '—' : p.experience + ' yrs'],
+      ['Rate', p => money(p.price)],
+      ['Availability', p => `<span class="badge ${p.availability === 'Available' ? 'ok' : 'off'}">${esc(p.availability)}</span>`],
+    ],
+    fields: [
+      { k:'name', label:'Full name', req:true }, { k:'specialty', label:'Specialty' },
+      { k:'experience', label:'Years of experience', type:'number', step:'1' }, { k:'price', label:'Rate (PHP)', type:'number', step:'0.01' },
+      { k:'location', label:'Location' }, { k:'style', label:'Photography style' },
+      { k:'services', label:'Services (comma separated)' },
+      { k:'availability', label:'Availability', type:'select', options: () => ['Available', 'Unavailable', 'On leave'], noBlank:true },
+      { k:'bio', label:'Biography', type:'textarea', wide:true },
+      { k:'profile_image', label:'Profile image URL', wide:true },
+      { k:'portfolio_images', label:'Portfolio image URLs (comma separated)', type:'textarea', wide:true },
+    ],
+  },
+  packages: {
+    label: 'Package', add: '+ Add Package',
+    cols: [
+      ['Package', p => `<strong>${esc(p.name)}</strong>`],
+      ['Description', p => esc((p.description || '—').slice(0, 60))],
+      ['Price', p => money(p.price)],
+      ['Status', p => `<span class="badge ${p.status === 'Active' ? 'ok' : 'off'}">${esc(p.status)}</span>`],
+    ],
+    fields: [
+      { k:'name', label:'Package name', req:true, wide:true },
+      { k:'description', label:'Description', type:'textarea', wide:true },
+      { k:'price', label:'Price (PHP)', type:'number', step:'0.01' },
+      { k:'status', label:'Status', type:'select', options: () => ['Active', 'Inactive'], noBlank:true },
+    ],
+  },
+};
+
+async function loadStats() {
+  const s = await api('/api/stats');
+  $('sBookings').textContent = s.total_bookings;
+  $('sUpcoming').textContent = s.upcoming_bookings;
+  $('sPhotog').textContent = s.photographers;
+  $('sPackages').textContent = s.packages;
+  $('cats').innerHTML = s.by_package.length
+    ? s.by_package.map(c => `<span class="badge">${esc(c.package_name)} · ${c.count}</span>`).join('')
+    : '<span style="color:var(--muted)">No bookings yet</span>';
+}
+
+async function loadLookups() {
+  [lookups.packages, lookups.photographers] = await Promise.all([api('/api/packages'), api('/api/photographers')]);
+}
+
+async function loadRows() {
+  const c = CFG[tab], q = $('search').value.trim();
+  rows = await api(`/api/${tab}` + (q ? '?q=' + encodeURIComponent(q) : ''));
+  $('thead').innerHTML = c.cols.map(([h]) => `<th>${h}</th>`).join('') + '<th>Actions</th>';
+  $('tbody').innerHTML = rows.length ? rows.map(r => `
+    <tr>
+      ${c.cols.map(([, fn]) => `<td>${fn(r)}</td>`).join('')}
+      <td class="actions">
+        <button class="sm ghost" onclick="openEdit(${r.id})">Edit</button>
+        <button class="sm danger" onclick="del(${r.id})">Delete</button>
+      </td>
+    </tr>`).join('') : `<tr><td colspan="${c.cols.length + 1}" class="empty">No ${tab} found.</td></tr>`;
+}
+
+const refresh = () => Promise.all([loadRows(), loadStats(), loadLookups()]);
+
+function fieldHtml(f, v) {
+  const id = 'f_' + f.k, val = v ?? '';
+  let input;
+  if (f.type === 'select') {
+    const opts = f.options();
+    input = `<select id="${id}">${f.noBlank ? '' : `<option value="">Select ${esc(f.label.toLowerCase())}</option>`}` +
+      opts.map(o => `<option${o === val ? ' selected' : ''}>${esc(o)}</option>`).join('') + '</select>';
+  } else if (f.type === 'textarea') {
+    input = `<textarea id="${id}" rows="3">${esc(val)}</textarea>`;
+  } else {
+    input = `<input id="${id}" type="${f.type || 'text'}" value="${esc(val)}"${f.step ? ` min="0" step="${f.step}"` : ''}>`;
+  }
+  return `<div class="${f.wide ? 'wide' : ''}"><label for="${id}">${esc(f.label)}${f.req ? ' *' : ''}</label>${input}</div>`;
+}
+
+function openDialog(item) {
+  const c = CFG[tab];
+  $('dlgTitle').textContent = (item ? 'Edit ' : 'New ') + c.label;
+  $('fId').value = item?.id ?? '';
+  $('fields').innerHTML = c.fields.map(f => fieldHtml(f, f.k === 'booking_time' ? item?.booking_time?.slice(0, 5) : item?.[f.k])).join('');
+  $('err').textContent = '';
+  $('dlg').showModal();
+}
+window.openEdit = (id) => openDialog(rows.find(r => r.id === id));
+
+window.del = async (id) => {
+  if (!confirm(`Delete this ${CFG[tab].label.toLowerCase()}?`)) return;
+  try { await api(`/api/${tab}/${id}`, { method:'DELETE' }); refresh(); }
+  catch (e) { alert(e.message); }
+};
+
+function setTab(next) {
+  tab = next;
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  $('addBtn').textContent = CFG[tab].add;
+  $('search').value = '';
+  loadRows().catch(e => alert(e.message));
+}
+$('tabs').onclick = (e) => { if (e.target.dataset.tab) setTab(e.target.dataset.tab); };
+
+$('addBtn').onclick = () => openDialog();
+$('cancelBtn').onclick = () => $('dlg').close();
+$('saveBtn').onclick = async () => {
+  const id = $('fId').value;
+  const body = {};
+  CFG[tab].fields.forEach(f => { body[f.k] = $('f_' + f.k).value; });
+  try {
+    await api(id ? `/api/${tab}/${id}` : `/api/${tab}`, { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
+    $('dlg').close(); refresh();
+  } catch (e) { $('err').textContent = e.message; }
+};
+
+let t; $('search').oninput = () => { clearTimeout(t); t = setTimeout(loadRows, 250); };
+refresh().catch(e => alert('Failed to load: ' + e.message));
+</script>
+</body>
+</html>
